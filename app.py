@@ -1,24 +1,44 @@
 
 import os
+import time
 import streamlit as st
-api_key = st.secrets.get("GEMINI_API_KEY", "")
 from dotenv import load_dotenv
 from google import genai
 
+# Load local .env file (for laptop development)
 load_dotenv()
 
+# Page configuration
 st.set_page_config(
     page_title="HealthGuard AI",
     page_icon="🏥",
     layout="wide"
 )
 
+# Read API key from Streamlit Cloud Secrets or local .env
+try:
+    api_key = st.secrets.get("GEMINI_API_KEY", "")
+except Exception:
+    api_key = ""
+
+if not api_key:
+    api_key = os.getenv("GEMINI_API_KEY", "")
+
+model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+
+try:
+    model = st.secrets.get("GEMINI_MODEL", model)
+except Exception:
+    pass
+
+# Website heading
 st.title("🏥 HealthGuard AI")
 st.subheader("Your Smart Multilingual Health Information Assistant")
 
 st.info(
-    "HealthGuard AI provides general health education, not medical "
-    "diagnosis or treatment. Always consult a qualified healthcare professional."
+    "HealthGuard AI provides general health education, "
+    "not medical diagnosis or treatment. "
+    "Always consult a qualified healthcare professional."
 )
 
 # Language selection
@@ -33,14 +53,11 @@ language_instructions = {
     "हिन्दी (Hindi)": "सरल हिंदी में जवाब दें।"
 }
 
-# API configuration
-api_key = os.getenv("GEMINI_API_KEY")
-model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
-
+# Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display previous messages
+# Display chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -49,54 +66,55 @@ for message in st.session_state.messages:
 question = st.chat_input("Ask a general health question...")
 
 if question:
-    st.session_state.messages.append(
-        {"role": "user", "content": question}
-    )
+
+    st.session_state.messages.append({
+        "role": "user",
+        "content": question
+    })
 
     with st.chat_message("user"):
         st.markdown(question)
 
     with st.chat_message("assistant"):
+
         if not api_key:
             answer = (
-                "AI connection is not configured. Please check your "
-                "GEMINI_API_KEY in the .env file."
+                "Gemini API key is not configured. "
+                "Please add GEMINI_API_KEY in Streamlit Cloud Secrets."
             )
-            st.warning(answer)
+            st.error(answer)
+
         else:
             try:
                 client = genai.Client(api_key=api_key)
 
                 prompt = f"""
-                You are HealthGuard AI, a safe health education assistant.
+You are HealthGuard AI, a safe health education assistant.
 
-                {language_instructions[language]}
+{language_instructions[language]}
 
-                Answer in clear, simple language.
-                Explain general health information and sensible precautions.
-                Do not diagnose diseases.
-                Do not prescribe medicines, doses, or personalized treatments.
-                Do not recommend unverified Ayurvedic remedies.
-                Encourage the user to consult a qualified healthcare professional.
-                If the user describes an emergency, advise contacting local
-                emergency services immediately. In India, call 112.
+Instructions:
+- Use simple and clear language.
+- Explain general health information and sensible precautions.
+- Do not diagnose diseases.
+- Do not prescribe medicines, doses, or personalized treatments.
+- Do not recommend unverified Ayurvedic remedies.
+- Encourage consultation with a qualified healthcare professional.
+- For emergencies in India, advise calling 112.
 
-                User question: {question}
-                """
+User question: {question}
+"""
 
-                with st.spinner("HealthGuard AI is preparing an answer..."):
-                    import time
+                with st.spinner("🏥 HealthGuard AI is preparing your answer..."):
 
-start_time = time.time()
+                    start_time = time.time()
 
-response = client.interactions.create(
-    model=model,
-    input=prompt
-)
+                    response = client.interactions.create(
+                        model=model,
+                        input=prompt
+                    )
 
-elapsed = time.time() - start_time
-
-st.caption(f"Response generated in {elapsed:.1f} seconds")
+                    elapsed = time.time() - start_time
 
                 answer = getattr(response, "output_text", None)
 
@@ -104,26 +122,35 @@ st.caption(f"Response generated in {elapsed:.1f} seconds")
                     answer = str(response)
 
                 st.markdown(answer)
+                st.caption(
+                    f"Response generated in {elapsed:.1f} seconds"
+                )
 
-            except Exception:
+            except Exception as error:
                 answer = (
                     "The AI service is temporarily unavailable. "
-                    "Please try again later. For urgent health concerns, "
-                    "contact a healthcare professional or call 112 in India."
+                    "Please try again later. "
+                    "For urgent health concerns, contact a healthcare "
+                    "professional or call 112 in India."
                 )
-                st.warning(answer)
 
-    st.session_state.messages.append(
-        {"role": "assistant", "content": answer}
-    )
+                st.warning(answer)
+                st.caption(f"Technical error: {type(error).__name__}")
+
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": answer
+    })
 
 # Clear chat
-if st.button("Clear Chat"):
+if st.button("🗑️ Clear Chat"):
     st.session_state.messages = []
     st.rerun()
 
 st.divider()
+
 st.caption(
     "HealthGuard AI | Health education only | "
     "Not a replacement for professional medical care"
 )
+
