@@ -85,10 +85,18 @@ if question:
                 """
 
                 with st.spinner("HealthGuard AI is preparing an answer..."):
-                    response = client.interactions.create(
-                        model=model,
-                        input=prompt
-                    )
+                    import time
+
+start_time = time.time()
+
+response = client.interactions.create(
+    model=model,
+    input=prompt
+)
+
+elapsed = time.time() - start_time
+
+st.caption(f"Response generated in {elapsed:.1f} seconds")
 
                 answer = getattr(response, "output_text", None)
 
